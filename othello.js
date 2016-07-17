@@ -37,9 +37,12 @@ var Othello = function(container)
   this.enemy = this.white;
 
   this.ableclick = true;
-  
+ 
+  this.level = $('[name=level]:checked').val();
+  if(this.level == undefined) this.level = 2;
+
   this.Inisialize();
-  this.AllPutable();
+  this.AllPutable(this.board);
   this.Paint();
  
   var self = this;
@@ -48,7 +51,16 @@ var Othello = function(container)
     if(!self.ableclick) return;
     x = event.originalEvent.pageX - $(this).offset().left;
     y = event.originalEvent.pageY - $(this).offset().top;
-    self.Attach(x / self.cellwidth | 0, y / self.cellwidth | 0, self.user);
+
+    x = x / self.cellwidth | 0;
+    y = y / self.cellwidth | 0;
+
+    if((self.user == self.white && !(self.board[y][x] & self.ablewhite)) ||
+     (self.user == self.black && !(self.board[y][x] & self.ableblack))) {
+      self.message.text("そのセルにはおけません><");
+    } else {
+      self.Attach(x, y, self.user);
+    }
   });
 };
 
@@ -121,12 +133,12 @@ Othello.prototype.Countputable = function(color)
   }
   return(count);
 };
-Othello.prototype.Countcolor = function(color)
+Othello.prototype.Countcolor = function(board, color)
 {
   var count = 0;
   for(var i = 0; i < 8; i++ ){
     for(var j = 0; j < 8; j++) {
-      if(this.board[i][j] == color) count += 1;
+      if(board[i][j] == color) count += 1;
     }
   }
   return(count);
@@ -137,23 +149,73 @@ Othello.prototype.Exit = function()
 {
 };
 
-Othello.prototype.playCPU = function(color)
-{ 
+Othello.prototype.evalute = function(board, color)
+{
+  var me = this.Countcolor(board, color);
+  var enemy = color == this.white ? this.black : this.white;
+  if(board[0][0] == color) me += 10;
+  else if(board[0][0] == enemy) me -= 5;
+  if(board[0][7] == color) me += 10;
+  else if(board[0][7] == enemy) me -= 5;
+  if(board[7][0] == color) me += 10;
+  else if(board[7][0] == enemy) me -= 5;
+  if(board[7][7] == color) me += 10;
+  else if(board[7][7] == enemy) me -= 5;
+  return(me);
+};
+
+Othello.prototype.negamaxSearch = function(color, depth)
+{
+  if(depth == 0) return([this.evalute(this.board, color), null, null]);
+
+  var buff = $.extend(true, {}, this.board);
+
+  var nextcolor = (color == this.white ? this.black : this.white);
   var bits = (color == this.white ? this.ablewhite : this.ableblack);
+
   var think = [];
   for(var i = 0; i < 8; i++) {
     for(var j = 0; j < 8; j++) {
       if(this.board[i][j] & bits) think.push([j, i]);
     }
   }
-  var poyo = Math.floor(Math.random() * think.length);
-  this.Attach(think[poyo][0], think[poyo][1], color);
+  if(think.length == 0) return(-this.negamaxSearch(nextcolor, depth - 1));
+  var best = -Infinity, x, y;
+  for(var i = 0; i < think.length; i++) {
+    this.Cellput(this.board, think[i][0], think[i][1], color);
+    var val = -this.negamaxSearch(nextcolor, depth - 1)[0];
+    if(best < val || best == -Infinity) {
+      best = val;
+      x = think[i][0];
+      y = think[i][1];
+    }
+    this.board = $.extend(true, {}, buff)
+  }
+  return([best, x, y]);
+};
+
+Othello.prototype.playCPU = function(color)
+{ 
+  if(this.level == 1) {
+    var bits = (color == this.white ? this.ablewhite : this.ableblack);
+    var think = [];
+    for(var i = 0; i < 8; i++) {
+      for(var j = 0; j < 8; j++) {
+        if(this.board[i][j] & bits) think.push([j, i]);
+      }
+    }
+    var poyo = Math.floor(Math.random() * think.length);
+    this.Attach(think[poyo][0], think[poyo][1], color);
+  } else {
+    var poyo = this.negamaxSearch(color, 4);
+    this.Attach(poyo[1], poyo[2], color);
+  }
 };
 
 // ターンチェンジ
 Othello.prototype.changeTurn = function(color)
 {
-  this.message.text("黒: " + this.Countcolor(this.black) + ", 白: " + this.Countcolor(this.white));
+  this.message.text("黒: " + this.Countcolor(this.board, this.black) + ", 白: " + this.Countcolor(this.board, this.white));
 
   if(color == this.user) {
     if(this.Countputable(this.enemy) > 0) {
@@ -185,11 +247,6 @@ Othello.prototype.changeTurn = function(color)
 // クリックされた
 Othello.prototype.Attach = function(x, y, color)
 {
-  if((color == this.white && !(this.board[y][x] & this.ablewhite)) ||
-     (color == this.black && !(this.board[y][x] & this.ableblack))) {
-    this.message.text("そのセルにはおけません><");
-    return;
-  }
   this.ableclick = false;
   this.message.text("(" + x + " ," + y + ")");
 
@@ -198,7 +255,7 @@ Othello.prototype.Attach = function(x, y, color)
   this.Paint();
   setTimeout(function()
   {
-    self.Cellput(x, y, color);
+    self.Cellput(self.board, x, y, color);
     setTimeout(function() {
       self.Paint();
       self.changeTurn(color);
@@ -206,17 +263,17 @@ Othello.prototype.Attach = function(x, y, color)
   }, 100);
 };
 
-Othello.prototype.AllPutable = function()
+Othello.prototype.AllPutable = function(board)
 {
   for(var i = 0; i < 8; i++) {
     for(var j = 0; j < 8; j++) {
-      if(this.board[i][j] != this.white && this.board[i][j] != this.black) {
-        this.board[i][j] = 0;
-        if(this.CellPutable(j, i, this.white)) {
-          this.board[i][j] |= this.ablewhite;
+      if(board[i][j] != this.white && board[i][j] != this.black) {
+        board[i][j] = 0;
+        if(this.CellPutable(board, j, i, this.white)) {
+          board[i][j] |= this.ablewhite;
         }
-        if(this.CellPutable(j, i, this.black)) {
-          this.board[i][j] |= this.ableblack;
+        if(this.CellPutable(board, j, i, this.black)) {
+          board[i][j] |= this.ableblack;
         }
       }
     }
@@ -228,10 +285,10 @@ Othello.prototype.isout = function(x, y)
   return(x < 0 || y < 0 || x >= 8 || y >= 8);
 };
 
-Othello.prototype.CellPutable = function(x, y, color)
+Othello.prototype.CellPutable = function(board, x, y, color)
 {
-  if(this.board[y][x] == this.white) return(false);
-  if(this.board[y][x] == this.black) return(false);
+  if(board[y][x] == this.white) return(false);
+  if(board[y][x] == this.black) return(false);
 
   var enemy = color == this.white ? this.black : this.white;
 
@@ -240,12 +297,12 @@ Othello.prototype.CellPutable = function(x, y, color)
     if(this.isout(nx, ny)) {
       continue;
     }
-    if(this.board[ny][nx] == enemy) {
-      while(!this.isout(nx, ny) && this.board[ny][nx] == enemy) {
+    if(board[ny][nx] == enemy) {
+      while(!this.isout(nx, ny) && board[ny][nx] == enemy) {
         nx += this.vx[i];
         ny += this.vy[i];
       }
-      if(!this.isout(nx, ny) && this.board[ny][nx] == color) {
+      if(!this.isout(nx, ny) && board[ny][nx] == color) {
         return(true);
       }
     }
@@ -253,7 +310,7 @@ Othello.prototype.CellPutable = function(x, y, color)
   return(false); 
 };
 
-Othello.prototype.Cellput = function(x, y, color)
+Othello.prototype.Cellput = function(board, x, y, color)
 {
   var enemy = color == this.white ? this.black : this.white;
   for(var i = 0; i < this.vy.length; i++) {
@@ -261,21 +318,21 @@ Othello.prototype.Cellput = function(x, y, color)
     if(this.isout(nx, ny)) {
       continue;
     }
-    if(this.board[ny][nx] == enemy) {
-      while(!this.isout(nx, ny) && this.board[ny][nx] == enemy) {
+    if(board[ny][nx] == enemy) {
+      while(!this.isout(nx, ny) && board[ny][nx] == enemy) {
         nx += this.vx[i];
         ny += this.vy[i];
       }
-      if(!this.isout(nx, ny) && this.board[ny][nx] == color) {
+      if(!this.isout(nx, ny) && board[ny][nx] == color) {
         nx = x + this.vx[i], ny = y + this.vy[i];
-        while(!this.isout(nx, ny) && this.board[ny][nx] != color) {
-          this.board[ny][nx] = color;
+        while(!this.isout(nx, ny) && board[ny][nx] != color) {
+          board[ny][nx] = color;
           nx += this.vx[i];
           ny += this.vy[i];
         }
       }
     }
   }
-  this.board[y][x] = color;
-  this.AllPutable();
+  board[y][x] = color;
+  this.AllPutable(board);
 };
