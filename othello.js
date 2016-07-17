@@ -154,13 +154,13 @@ Othello.prototype.evalute = function(board, color)
   var me = this.Countcolor(board, color);
   var enemy = color == this.white ? this.black : this.white;
   if(board[0][0] == color) me += 10;
-  else if(board[0][0] == enemy) me -= 5;
+  else if(board[0][0] == enemy) me -= 10;
   if(board[0][7] == color) me += 10;
-  else if(board[0][7] == enemy) me -= 5;
+  else if(board[0][7] == enemy) me -= 10;
   if(board[7][0] == color) me += 10;
-  else if(board[7][0] == enemy) me -= 5;
+  else if(board[7][0] == enemy) me -= 10;
   if(board[7][7] == color) me += 10;
-  else if(board[7][7] == enemy) me -= 5;
+  else if(board[7][7] == enemy) me -= 10;
   return(me);
 };
 
