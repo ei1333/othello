@@ -32,7 +32,8 @@ var Othello = function(container)
   this.vy = [-1, -1, -1, 0, 1, 1, 1, 0];
 
   this.message = this.container.find("#message");
-  
+  this.cpumessage = this.container.find("#message2");
+
   this.user = this.black;
   this.enemy = this.white;
 
@@ -149,21 +150,15 @@ Othello.prototype.Exit = function()
 {
 };
 
+var flag;
+
 Othello.prototype.evalute = function(board, color)
 {
-  //var me = this.Countcolor(board, color);
+  if(flag) return(this.Countcolor(board, color));
   var enemy = color == this.white ? this.black : this.white;
- /* if(board[0][0] == color) me += 10;
-  else if(board[0][0] == enemy) me -= 5;
-  if(board[0][7] == color) me += 10;
-  else if(board[0][7] == enemy) me -= 5;
-  if(board[7][0] == color) me += 10;
-  else if(board[7][0] == enemy) me -= 5;
-  if(board[7][7] == color) me += 10;
-  else if(board[7][7] == enemy) me -= 5;
-  return(me);*/
-
-     var evaluateTable = [
+  var bits = color == this.white ? this.ablewhite : this.ableblack;
+  var ebits = color == this.white ? this.ableblack : this.ablewhiet;
+  var evaluateTable = [
       [ 30, -5,  0, -1, -1,  0, -5,  30],
       [-5, -15, -3, -3, -3, -3, -15, -5],
       [  0,  -3,  0, -1, -1,  0,  -3,   0],
@@ -172,19 +167,20 @@ Othello.prototype.evalute = function(board, color)
       [  0,  -3,  0, -1, -1,  0,  -3,   0],
       [-5, -15, -3, -3, -3, -3, -15, -5],
       [ 30, -5,  0, -1, -1,  0, -5,  30]
-    ];
-    var value = 0;
-
-    for(var i = 0; i < 8; i++) {
-      for(var j = 0; j < 8; j++) {
-        if(color == this.board[i][j]) value += evaluateTable[i][j];
-        else if(enemy == this.board[i][j]) value -= evaluateTable[i][j];
-      }
+  ];
+  var value = 0;
+  for(var i = 0; i < 8; i++) {
+    for(var j = 0; j < 8; j++) {
+      if(color == board[i][j]) value += evaluateTable[i][j];
+      else if(enemy == board[i][j]) value -= evaluateTable[i][j];
+      else if(enemy & bits) value += 0.5;
+      else if(enemy & ebits) value -= 0.5;
     }
-    return(value);
+  }
+  return(value);
 };
 
-Othello.prototype.negamaxSearch = function(color, depth)
+Othello.prototype.negamaxSearch = function(color, depth, alpha, beta)
 {
   if(depth == 0) return([this.evalute(this.board, color), null, null]);
 
@@ -199,17 +195,21 @@ Othello.prototype.negamaxSearch = function(color, depth)
       if(this.board[i][j] & bits) think.push([j, i]);
     }
   }
-  if(think.length == 0) return(-this.negamaxSearch(nextcolor, depth - 1));
-  var best = -Infinity, x, y;
+  var best = alpha, x, y;
+  if(think.length == 0) {
+    var k = this.negamaxSearch(nextcolor, depth - 1, -beta, -Math.max(alpha, best));
+    return([-k[0], k[1], k[2]]);
+  }
   for(var i = 0; i < think.length; i++) {
     this.Cellput(this.board, think[i][0], think[i][1], color);
-    var val = -this.negamaxSearch(nextcolor, depth - 1)[0];
-    if(best < val || best == -Infinity) {
+    var val = -(this.negamaxSearch(nextcolor, depth - 1, -beta, -Math.max(alpha, best))[0]);
+    if(best < val || best == -114514) {
       best = val;
       x = think[i][0];
       y = think[i][1];
     }
     this.board = $.extend(true, {}, buff)
+    if(best >= beta) break;
   }
   return([best, x, y]);
 };
@@ -227,7 +227,32 @@ Othello.prototype.playCPU = function(color)
     var poyo = Math.floor(Math.random() * think.length);
     this.Attach(think[poyo][0], think[poyo][1], color);
   } else {
-    var poyo = this.negamaxSearch(color, 4);
+    var proc = this.Countcolor(this.board, this.white) + this.Countcolor(this.board, this.black);
+    var poyo = 0;
+    if(proc >= 55) {
+      /* 9! */
+      /* 全手読み */
+      flag = true;
+      poyo = this.negamaxSearch(color, 15, -114514, 114514);
+      if(-poyo[0] >= 33) {
+        this.cpumessage.text("黒が " + (-poyo[0]) + " 個とりそう... 負けた＞＜");
+      } else if(-poyo[0] == 32) {
+        this.cpumessage.text("おーひきわけー");
+      } else {
+        this.cpumessage.text("白が " + (64 + poyo[0]) + " 個とりそう... かった!!");
+      }
+    } else {
+      flag = false;
+      poyo = this.negamaxSearch(color, 5, -114514, 114514);
+      if(poyo[0] >= 100) this.cpumessage.text("かったぜ");
+      if(poyo[0] >= 50) this.cpumessage.text("勝てそうかな??");
+      else if(poyo[0] >= -10) {
+        if(proc <= 15) this.cpumessage.text("まだ序盤だね");
+        else if(proc <= 30) this.cpumessage.text("中盤かな");
+        else if(proc <= 40) this.cpumessage.text("！？");
+      } else if(poyo[0] >= -50) this.cpumessage.text("!?");
+      else this.cpumessage.text("まけた><");
+    }
     this.Attach(poyo[1], poyo[2], color);
   }
 };
